@@ -26,7 +26,26 @@ def add_gems
   gem 'vite_rails'
   gem 'vite_ruby'
   gem 'image_processing', '~> 1.2'
-  gem 'annotate', group: :development
+  gem 'devise', '~> 4.8'
+  gem 'friendly_id', '~> 5.4', '>= 5.4.2'
+  gem 'sidekiq', '~> 6.3', '>= 6.3.1'
+  gem 'name_of_person', '~> 1.1', '>= 1.1.1'
+  gem 'stripe', '>= 2.8', '< 6.0'
+  gem "net-http" # Avoiding "already initialized constant errors" with net/protocol
+  gem_group :development, :test do
+    gem 'annotate'
+    gem 'better_errors'  
+    gem "hotwire-livereload"
+    gem 'rspec-rails'
+    gem 'faker'
+    gem 'factory_bot_rails'
+    gem 'pry'
+    gem 'spring-commands-rspec'
+    gem 'rubocop', require: false
+    gem 'rubocop-performance', require: false
+    gem 'rubocop-rails', require: false
+    gem 'rubocop-rspec', require: false
+  end
 end
 
 def set_application_name
@@ -54,6 +73,52 @@ end
 def add_javascript_react
   run 'yarn add autoprefixer postcss sass tailwindcss vite react react-dom'
   run 'yarn add -D @vitejs/plugin-react-refresh eslint prettier eslint-plugin-prettier eslint-config-prettier eslint-plugin-react eslint-plugin-tailwindcss path vite-plugin-full-reload vite-plugin-ruby'
+end
+
+def add_testing
+  generate "rspec:install"
+end
+
+def add_sidekiq
+  environment "config.active_job.queue_adapter = :sidekiq"
+
+  insert_into_file "config/routes.rb",
+    "require 'sidekiq/web'\n\n",
+    before: "Rails.application.routes.draw do"
+
+  content = <<-RUBY
+    authenticate :user, lambda { |u| u.admin? } do
+      mount Sidekiq::Web => '/sidekiq'
+    end
+  RUBY
+  insert_into_file "config/routes.rb", "#{content}\n\n", after: "Rails.application.routes.draw do\n"
+end
+
+def add_friendly_id
+  generate "friendly_id"
+end
+
+def add_users
+  # Install Devise
+  generate "devise:install"
+
+  # Configure Devise
+  environment "config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }",
+              env: 'development'
+
+  route "root to: 'home#index'"
+
+  # Create Devise User
+  generate :devise, "User", "first_name", "last_name", "admin:boolean"
+
+  # set admin boolean to false by default
+  in_root do
+    migration = Dir.glob("db/migrate/*").max_by{ |f| File.mtime(f) }
+    gsub_file migration, /:admin/, ":admin, default: false"
+  end
+
+  # name_of_person gem
+  append_to_file("app/models/user.rb", "\nhas_person_name\n", after: "class User < ApplicationRecord")
 end
 
 def copy_templates
@@ -103,6 +168,9 @@ after_bundle do
   set_application_name
   add_pages_controller
   run_command_flags
+  add_users
+  add_sidekiq
+  add_friendly_id
 
   copy_templates
   add_vite
