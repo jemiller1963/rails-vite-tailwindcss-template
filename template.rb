@@ -106,7 +106,7 @@ def add_users
   environment "config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }",
               env: 'development'
 
-  route "root to: 'home#index'"
+  # route "root to: 'home#index'"
 
   # Create Devise User
   generate :devise, "User", "first_name", "last_name", "admin:boolean"
